@@ -9,6 +9,7 @@ import makerbot_driver
 import serial
 import serial.tools.list_ports as lp
 import optparse
+import time
 
 parser = optparse.OptionParser()
 parser.add_option("-f", "--filename", dest="filename",
@@ -52,9 +53,20 @@ parser = getattr(obj, 'gcodeparser')
 parser.environment.update(variables)
 parser.state.values["build_name"] = filename[:15]
 
+def exec_line(line):
+    while True:
+        try:
+            parser.execute_line(line)
+            break
+        except makerbot_driver.BufferOverflowError as e:
+            try:
+                parser.s3g.writer._condition.wait(.2)
+            except:
+                time.sleep(.2)
+
 if options.sequences:
     for line in start_gcode:
-        parser.execute_line(line)
+        exec_line(line)
 
 print "==%s==> Starting gcode stream" % datetime.now()
 with open(options.filename) as f:
@@ -62,7 +74,7 @@ with open(options.filename) as f:
     num_lines = len(lines)
     interval = round(num_lines * 0.01)
     for n, line in enumerate(lines):
-        parser.execute_line(line)
+        exec_line(line)
         percent = round(float(n) / float(num_lines) * 100.0)
         if n % interval == 0:
             print "==%s==> Sent %d/%d [%d%%]" % (datetime.now(), n, num_lines, percent)
@@ -73,4 +85,4 @@ print "==%s==> Gcode stream finished" % datetime.now()
 
 if options.sequences:
     for line in end_gcode:
-        parser.execute_line(line)
+        exec_line(line)
